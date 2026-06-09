@@ -68,3 +68,23 @@ def test_update_task_missing_raises(sample_xml, tmp_path):
     from projectlibre_mcp import writer
     with pytest.raises(ValueError, match="no encontrada"):
         writer.update_task(sample_xml, 99999, {"name": "x"}, out=str(tmp_path / "o.xml"))
+
+
+def test_set_dependency(sample_xml, tmp_path):
+    from projectlibre_mcp import reader, writer
+    tasks = {t["name"]: t for t in reader.list_tasks(sample_xml)}
+    out = str(tmp_path / "dep.xml")
+    writer.set_dependency(sample_xml, tasks["Diseno"]["id"], tasks["Pruebas"]["id"],
+                          type="FS", out=out)
+    pruebas = reader.get_task(out, tasks["Pruebas"]["id"])
+    pred_ids = {pr["predecessor_id"] for pr in pruebas["predecessors"]}
+    assert tasks["Diseno"]["id"] in pred_ids
+
+
+def test_assign_resource_creates_resource(sample_xml, tmp_path):
+    from projectlibre_mcp import reader, writer
+    tasks = {t["name"]: t for t in reader.list_tasks(sample_xml)}
+    out = str(tmp_path / "asg.xml")
+    writer.assign_resource(sample_xml, tasks["Diseno"]["id"], "Ana", units=50, out=out)
+    diseno = reader.get_task(out, tasks["Diseno"]["id"])
+    assert "Ana" in diseno["resources"]

@@ -43,15 +43,23 @@ def _link(project, predecessor_id, successor_id, rtype="FS", lag_days=0):
 
 
 def _assign(project, task, resource_name, units=100):
-    c = core()  # noqa: F841  (asegura JVM)
+    core()  # noqa: F841  (asegura JVM)
     res = None
     for r in project.getResources():
         if r.getName() is not None and str(r.getName()) == resource_name:
             res = r
             break
     if res is None:
+        # When adding to a loaded project, MPXJ does not auto-assign UID for
+        # new resources — compute it manually to avoid a null reference on write.
+        existing = list(project.getResources())
+        max_ruid = max(
+            (int(r.getUniqueID()) for r in existing if r.getUniqueID() is not None),
+            default=0,
+        )
         res = project.addResource()
         res.setName(resource_name)
+        res.setUniqueID(jpype.JInt(max_ruid + 1))
     a = task.addResourceAssignment(res)
     a.setUnits(jpype.JDouble(float(units)))
     return res
