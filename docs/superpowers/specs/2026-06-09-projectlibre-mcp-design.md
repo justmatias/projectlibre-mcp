@@ -121,3 +121,15 @@ Convenciones: fechas ISO `YYYY-MM-DD`; duración en **días laborables** del cal
 4. `add_task`/`set_dependency`/`assign_resource` modifican y el cambio se ve al reabrir.
 5. `critical_path` devuelve la ruta crítica de un proyecto de prueba conocido.
 6. Suite de tests (round-trip + smoke) en verde.
+
+## 12. Desviaciones de implementación (v0.1)
+
+Ajustes hechos durante la implementación (descubiertos por spikes y revisión de código), respecto a las secciones 4–10 de arriba:
+
+- **`JPype1` es dependencia explícita** — `mpxj` no la declara; se instala aparte (§2.3 confirmado).
+- **Forma del predecesor:** `list_tasks`/`get_task` emiten `predecessors:[{predecessor_id, type, lag_days}]` (con `lag_days` numérico), no `{id, type, lag}`. Naming consistente con `set_dependency`.
+- **`summarize_project`** devuelve `duration_days` (días-calendario entre inicio y fin del proyecto; `None` si el archivo no está calendarizado) y `percent_complete` (promedio del % de avance de las tareas).
+- **`add_task` sin `after_task_id`** — las tareas nuevas se agregan al final (YAGNI; el orden/posición es cosmético en MSPDI). Si se necesita insertar en posición, es trabajo futuro.
+- **`list_resources` sin flag de sobreasignación** — devuelve las asignaciones por recurso, pero la detección automática de overallocation (requiere análisis time-phased) se difiere a trabajo futuro.
+- **Asignación de UID/ID en proyectos cargados:** MPXJ no auto-asigna `UniqueID`/`ID` al agregar tareas/recursos a un proyecto leído de disco; se calculan con `max(existentes)+1` (helper `_next_id`) para evitar NPE en el writer y colisiones de ID.
+- **Bootstrap de hilos:** se usa `java.lang.Thread.isAttached()`/`attachAsDaemon()` (API no-deprecada, daemon) en vez de las llamadas `jpype.*` deprecadas.
