@@ -32,3 +32,39 @@ def test_create_project_rejects_pod_output(tmp_path):
     with pytest.raises(ValueError, match="pod"):
         writer.create_project("X", "2026-01-01", [{"name": "a", "duration_days": 1}],
                               out=str(tmp_path / "x.pod"))
+
+
+def test_add_task_to_existing(sample_xml, tmp_path):
+    from projectlibre_mcp import reader, writer
+    out = str(tmp_path / "mas.xml")
+    res = writer.add_task(sample_xml, name="Despliegue", duration_days=2, out=out)
+    assert res["task_id"] >= 1
+    names = sorted(t["name"] for t in reader.list_tasks(out))
+    assert "Despliegue" in names
+
+
+def test_update_task_changes_duration(sample_xml, tmp_path):
+    from projectlibre_mcp import reader, writer
+    tasks = {t["name"]: t for t in reader.list_tasks(sample_xml)}
+    tid = tasks["Diseno"]["id"]
+    out = str(tmp_path / "upd.xml")
+    writer.update_task(sample_xml, tid, {"duration_days": 8, "percent_complete": 50}, out=out)
+    updated = reader.get_task(out, tid)
+    assert updated["duration_days"] == 8.0
+
+
+def test_remove_task(sample_xml, tmp_path):
+    from projectlibre_mcp import reader, writer
+    tasks = {t["name"]: t for t in reader.list_tasks(sample_xml)}
+    tid = tasks["Pruebas"]["id"]
+    out = str(tmp_path / "rm.xml")
+    writer.remove_task(sample_xml, tid, out=out)
+    names = sorted(t["name"] for t in reader.list_tasks(out))
+    assert "Pruebas" not in names
+
+
+def test_update_task_missing_raises(sample_xml, tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="no encontrada"):
+        writer.update_task(sample_xml, 99999, {"name": "x"}, out=str(tmp_path / "o.xml"))

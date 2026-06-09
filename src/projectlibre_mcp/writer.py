@@ -120,15 +120,22 @@ def _get_task_or_raise(project, task_id):
 
 def add_task(file, name, duration_days, predecessors=None, resource=None, out=None):
     p = load_project(file)
+    # When adding to a loaded project, MPXJ does not auto-assign UID/ID;
+    # compute them manually to avoid a NullPointerException during write.
+    existing_tasks = list(p.getTasks())
+    max_uid = max((int(t.getUniqueID()) for t in existing_tasks if t.getUniqueID() is not None), default=0)
+    max_seq = len([t for t in existing_tasks if t.getID() is not None])
     t = _make_task(p, name, duration_days)
-    new_id = int(t.getUniqueID())
+    new_uid = max_uid + 1
+    t.setUniqueID(jpype.JInt(new_uid))
+    t.setID(jpype.JInt(max_seq + 1))
     for pid in (predecessors or []):
-        _link(p, pid, new_id, "FS", 0)
+        _link(p, pid, new_uid, "FS", 0)
     if resource:
         _assign(p, t, resource, 100)
     out = _resolve_out(file, out)
     save_xml(p, out)
-    return {"out": out, "task_id": new_id}
+    return {"out": out, "task_id": new_uid}
 
 
 def update_task(file, task_id, fields, out=None):
