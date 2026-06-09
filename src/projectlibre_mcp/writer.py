@@ -18,6 +18,11 @@ def _reltype(code):
     return getattr(core().RelationType, name)
 
 
+def _next_id(items, getter):
+    """Siguiente entero libre = max(getter(x)) + 1 sobre items (1 si no hay ninguno)."""
+    return max((int(getter(x)) for x in items if getter(x) is not None), default=0) + 1
+
+
 def _make_task(project, name, duration_days, percent_complete=None, is_milestone=False):
     c = core()
     t = project.addTask()
@@ -43,23 +48,17 @@ def _link(project, predecessor_id, successor_id, rtype="FS", lag_days=0):
 
 
 def _assign(project, task, resource_name, units=100):
-    core()  # noqa: F841  (asegura JVM)
     res = None
     for r in project.getResources():
         if r.getName() is not None and str(r.getName()) == resource_name:
             res = r
             break
     if res is None:
-        # When adding to a loaded project, MPXJ does not auto-assign UID for
-        # new resources — compute it manually to avoid a null reference on write.
-        existing = list(project.getResources())
-        max_ruid = max(
-            (int(r.getUniqueID()) for r in existing if r.getUniqueID() is not None),
-            default=0,
-        )
+        # MPXJ no auto-asigna UniqueID a recursos nuevos en un proyecto cargado.
+        new_ruid = _next_id(list(project.getResources()), lambda r: r.getUniqueID())
         res = project.addResource()
         res.setName(resource_name)
-        res.setUniqueID(jpype.JInt(max_ruid + 1))
+        res.setUniqueID(jpype.JInt(new_ruid))
     a = task.addResourceAssignment(res)
     a.setUnits(jpype.JDouble(float(units)))
     return res
@@ -94,11 +93,19 @@ def create_project(name, start_date, tasks, out):
     for i, spec in enumerate(tasks):
         for pre in (spec.get("predecessors") or []):
             if isinstance(pre, bool):
-                raise ValueError("predecessor inválido (bool)")
+                raise ValueError(f"predecessor inválido (bool): {pre!r}")
             if isinstance(pre, int):
+                if not (1 <= pre <= len(created)):
+                    raise ValueError(
+                        f"Índice de predecesor fuera de rango: {pre} "
+                        f"(hay {len(created)} tareas, índices válidos 1..{len(created)})"
+                    )
                 pred_task = created[pre - 1]
             else:
-                pred_task = name_to_task[str(pre)]
+                key = str(pre)
+                if key not in name_to_task:
+                    raise ValueError(f"Predecesor por nombre no encontrado: {key!r}")
+                pred_task = name_to_task[key]
             builder = c.Relation.Builder().predecessorTask(pred_task).type(_reltype("FS"))
             created[i].addPredecessor(builder)
         if spec.get("resource"):
@@ -128,15 +135,14 @@ def _get_task_or_raise(project, task_id):
 
 def add_task(file, name, duration_days, predecessors=None, resource=None, out=None):
     p = load_project(file)
-    # When adding to a loaded project, MPXJ does not auto-assign UID/ID;
-    # compute them manually to avoid a NullPointerException during write.
-    existing_tasks = list(p.getTasks())
-    max_uid = max((int(t.getUniqueID()) for t in existing_tasks if t.getUniqueID() is not None), default=0)
-    max_seq = len([t for t in existing_tasks if t.getID() is not None])
+    # En un proyecto cargado, MPXJ no auto-asigna UniqueID/ID; calcularlos con
+    # max+1 (no con un conteo) para no colisionar con IDs existentes no-densos.
+    existing = list(p.getTasks())
+    new_uid = _next_id(existing, lambda t: t.getUniqueID())
+    new_id = _next_id(existing, lambda t: t.getID())
     t = _make_task(p, name, duration_days)
-    new_uid = max_uid + 1
     t.setUniqueID(jpype.JInt(new_uid))
-    t.setID(jpype.JInt(max_seq + 1))
+    t.setID(jpype.JInt(new_id))
     for pid in (predecessors or []):
         _link(p, pid, new_uid, "FS", 0)
     if resource:

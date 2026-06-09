@@ -88,3 +88,37 @@ def test_assign_resource_creates_resource(sample_xml, tmp_path):
     writer.assign_resource(sample_xml, tasks["Diseno"]["id"], "Ana", units=50, out=out)
     diseno = reader.get_task(out, tasks["Diseno"]["id"])
     assert "Ana" in diseno["resources"]
+
+
+def test_add_task_no_id_collision_after_remove(tmp_path):
+    """Regresión C1: cargar -> remove_task -> add_task no debe producir IDs duplicados
+    aunque MPXJ deje IDs no-densos tras el remove."""
+    import jpype
+    from projectlibre_mcp import io, writer
+    base = str(tmp_path / "base.xml")
+    writer.create_project(
+        "Reg", "2026-01-01",
+        [{"name": f"T{i}", "duration_days": 1} for i in range(1, 6)],
+        out=base,
+    )
+    removed = str(tmp_path / "removed.xml")
+    writer.remove_task(base, 2, out=removed)  # deja IDs no-densos
+    out = str(tmp_path / "added.xml")
+    writer.add_task(removed, name="Nueva", duration_days=1, out=out)
+    p = io.load_project(out)
+    ids = [int(t.getID()) for t in p.getTasks()
+           if t.getName() is not None and t.getID() is not None]
+    assert len(ids) == len(set(ids)), f"IDs duplicados tras add_task: {sorted(ids)}"
+
+
+def test_create_project_bad_predecessor_index_raises(tmp_path):
+    """M3: índice de predecesor fuera de rango -> ValueError claro (no IndexError)."""
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="rango"):
+        writer.create_project(
+            "X", "2026-01-01",
+            [{"name": "a", "duration_days": 1},
+             {"name": "b", "duration_days": 1, "predecessors": [9]}],
+            out=str(tmp_path / "x.xml"),
+        )
