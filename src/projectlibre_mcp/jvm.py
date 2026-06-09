@@ -18,7 +18,8 @@ def ensure_jvm():
         jpype.startJVM()  # usa JAVA_HOME (JDK 21)
     import java.lang  # noqa: PLC0415 -- only available after JVM starts
     if not java.lang.Thread.isAttached():
-        jpype.attachThreadToJVM()
+        # API no-deprecada; daemon => el hilo adjunto no bloquea el shutdown de la JVM
+        java.lang.Thread.attachAsDaemon()
 
 
 def core():

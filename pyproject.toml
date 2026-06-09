@@ -22,3 +22,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/projectlibre_mcp"]
+
+[tool.pytest.ini_options]
+# La JVM (HotSpot) usa SIGSEGV de forma deliberada en Windows; faulthandler de
+# pytest lo reporta como "Windows fatal exception: access violation" (falso positivo).
+# Desactivarlo deja el output de los tests limpio sin ocultar errores reales de Python.
+addopts = "-p no:faulthandler"
