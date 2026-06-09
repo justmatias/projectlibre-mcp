@@ -34,6 +34,9 @@ def save_xml(project, out_path):
         )
     if not low.endswith(".xml"):
         raise ValueError("La salida debe terminar en .xml (MSPDI).")
+    parent = os.path.dirname(os.path.abspath(out_path))
+    if not os.path.isdir(parent):
+        raise ValueError(f"El directorio de salida no existe: {parent}")
     w = pkg("org.mpxj.writer")
     w.UniversalProjectWriter(w.FileFormat.MSPDI).write(project, out_path)
     return out_path

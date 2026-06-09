@@ -29,3 +29,9 @@ def test_save_xml_rejects_pod_output(sample_xml, tmp_path):
     p = io.load_project(sample_xml)
     with pytest.raises(ValueError, match="pod"):
         io.save_xml(p, str(tmp_path / "x.pod"))
+
+
+def test_save_xml_rejects_missing_dir(sample_xml):
+    p = io.load_project(sample_xml)
+    with pytest.raises(ValueError, match="no existe"):
+        io.save_xml(p, "C:/ruta/que/no/existe/x.xml")
