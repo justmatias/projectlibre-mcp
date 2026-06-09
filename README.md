@@ -52,7 +52,7 @@ claude mcp add -s user projectlibre -- uv run --directory "C:\Users\osyanne\Docu
 
 ## Desarrollo
 ```
-uv run pytest -q     # 27 tests
+uv run pytest -q     # suite completa
 ```
 
 Stack: Python 3.12 · `mcp` (FastMCP) · `mpxj` (JPype sobre JDK 21) · pytest. Arquitectura en capas: `jvm` → `io` → `model` → `reader`/`writer` → `server`.
