@@ -15,10 +15,11 @@ def jbool(v):
 
 
 def relation_dict(rel):
+    lag = rel.getLag()
     return {
         "predecessor_id": int(rel.getPredecessorTask().getUniqueID()),
-        "type": jstr(rel.getType()),   # "FS", "SS", "FF", "SF"
-        "lag": jstr(rel.getLag()),     # p.ej. "0.0d"
+        "type": jstr(rel.getType()),       # "FS", "SS", "FF", "SF"
+        "lag_days": jfloat(lag.getDuration()) if lag is not None else None,
     }
 
 

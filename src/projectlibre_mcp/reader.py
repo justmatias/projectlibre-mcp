@@ -10,6 +10,26 @@ def _named_tasks(project):
     return [t for t in project.getTasks() if t.getName() is not None]
 
 
+def _project_duration_days(props):
+    """Días-calendario entre inicio y fin del proyecto (None si falta alguno)."""
+    try:
+        start = props.getStartDate()
+        finish = props.getFinishDate()
+        if start is None or finish is None:
+            return None
+        from java.time.temporal import ChronoUnit
+        return int(ChronoUnit.DAYS.between(start, finish))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _avg_percent_complete(tasks):
+    """Promedio de % de avance de las tareas con valor (None si ninguna)."""
+    vals = [jfloat(t.getPercentageComplete()) for t in tasks]
+    vals = [v for v in vals if v is not None]
+    return round(sum(vals) / len(vals), 2) if vals else None
+
+
 def summarize_project(path):
     p = load_project(path)
     props = p.getProjectProperties()
@@ -20,6 +40,8 @@ def summarize_project(path):
         "name": jstr(props.getName()),
         "start": jstr(props.getStartDate()),
         "finish": jstr(props.getFinishDate()),
+        "duration_days": _project_duration_days(props),
+        "percent_complete": _avg_percent_complete(tasks),
         "task_count": len(tasks),
         "resource_count": len(resources),
         "milestones": milestones,

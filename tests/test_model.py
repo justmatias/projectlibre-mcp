@@ -21,5 +21,6 @@ def test_relation_dict_shape(sample_xml):
     by_name = {str(t.getName()): t for t in p.getTasks() if t.getName() is not None}
     rels = list(by_name["Pruebas"].getPredecessors())
     rd = model.relation_dict(rels[0])
-    assert set(rd) == {"predecessor_id", "type", "lag"}
+    assert set(rd) == {"predecessor_id", "type", "lag_days"}
     assert rd["type"] == "FS"
+    assert rd["lag_days"] == 0.0

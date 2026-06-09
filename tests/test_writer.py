@@ -122,3 +122,12 @@ def test_create_project_bad_predecessor_index_raises(tmp_path):
              {"name": "b", "duration_days": 1, "predecessors": [9]}],
             out=str(tmp_path / "x.xml"),
         )
+
+
+def test_update_task_rejects_unknown_field(sample_xml, tmp_path):
+    import pytest
+    from projectlibre_mcp import reader, writer
+    tasks = {t["name"]: t for t in reader.list_tasks(sample_xml)}
+    tid = tasks["Diseno"]["id"]
+    with pytest.raises(ValueError, match="no reconocidos"):
+        writer.update_task(sample_xml, tid, {"duration": 8}, out=str(tmp_path / "o.xml"))

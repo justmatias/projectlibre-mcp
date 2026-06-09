@@ -153,6 +153,13 @@ def add_task(file, name, duration_days, predecessors=None, resource=None, out=No
 
 
 def update_task(file, task_id, fields, out=None):
+    allowed = {"name", "duration_days", "percent_complete", "is_milestone", "start"}
+    unknown = set(fields) - allowed
+    if unknown:
+        raise ValueError(
+            f"Campos no reconocidos en update_task: {sorted(unknown)}. "
+            f"Válidos: {sorted(allowed)}"
+        )
     c = core()
     p = load_project(file)
     t = _get_task_or_raise(p, task_id)

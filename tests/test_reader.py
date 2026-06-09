@@ -49,3 +49,10 @@ def test_critical_path_shape(sample_xml):
     assert len(cp["tasks"]) == 3
     for t in cp["tasks"]:
         assert set(t) >= {"id", "name", "is_critical", "total_slack", "free_slack"}
+
+
+def test_summarize_includes_duration_and_percent(sample_xml):
+    from projectlibre_mcp import reader
+    s = reader.summarize_project(sample_xml)
+    assert "duration_days" in s
+    assert "percent_complete" in s
