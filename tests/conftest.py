@@ -73,3 +73,12 @@ def hours_xml(tmp_path, _jvm):
     out = str(tmp_path / "hours.xml")
     w.UniversalProjectWriter(w.FileFormat.MSPDI).write(p, out)
     return out
+
+
+@pytest.fixture()
+def in_memory_project(_jvm):
+    """(org.mpxj, ProjectFile) en memoria con calendario por defecto."""
+    org_mpxj = importlib.import_module("org.mpxj")
+    project = org_mpxj.ProjectFile()
+    project.addDefaultBaseCalendar()
+    return org_mpxj, project

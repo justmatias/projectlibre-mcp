@@ -25,17 +25,37 @@ def duration_in_days(duration, project):
     if duration is None:
         return None
     time_unit = pkg("org.mpxj").TimeUnit
+    if duration.getUnits() in (time_unit.PERCENT, time_unit.ELAPSED_PERCENT):
+        return None  # un porcentaje no tiene equivalente en días sin una duración base
     target = time_unit.ELAPSED_DAYS if duration.getUnits().isElapsed() else time_unit.DAYS
     converted = duration.convertUnits(target, project.getProjectProperties())
     return round(float(converted.getDuration()), 4)
 
 
+def is_elapsed(duration):
+    return None if duration is None else bool(duration.getUnits().isElapsed())
+
+
+def _lag_in_days(lag, predecessor, project):
+    """Lag en días; un lag porcentual es una fracción de la duración del predecesor."""
+    if lag is None:
+        return None
+    time_unit = pkg("org.mpxj").TimeUnit
+    if lag.getUnits() in (time_unit.PERCENT, time_unit.ELAPSED_PERCENT):
+        base = duration_in_days(predecessor.getDuration(), project)
+        return None if base is None else round(float(lag.getDuration()) / 100 * base, 4)
+    return duration_in_days(lag, project)
+
+
 def relation_dict(rel):
     lag = rel.getLag()
+    predecessor = rel.getPredecessorTask()
     return {
-        "predecessor_id": int(rel.getPredecessorTask().getUniqueID()),
+        "predecessor_id": int(predecessor.getUniqueID()),
         "type": jstr(rel.getType()),       # "FS", "SS", "FF", "SF"
-        "lag_days": duration_in_days(lag, rel.getSuccessorTask().getParentFile()),
+        "lag": jstr(lag),
+        "lag_days": _lag_in_days(lag, predecessor, rel.getSuccessorTask().getParentFile()),
+        "lag_is_elapsed": is_elapsed(lag),
     }
 
 
@@ -57,6 +77,7 @@ def task_to_dict(task):
         "finish": jstr(task.getFinish()),
         "duration": jstr(dur),
         "duration_days": duration_in_days(dur, task.getParentFile()),
+        "duration_is_elapsed": is_elapsed(dur),
         "percent_complete": jfloat(task.getPercentageComplete()),
         "is_milestone": jbool(task.getMilestone()),
         "is_critical": jbool(task.getCritical()),
