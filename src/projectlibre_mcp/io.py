@@ -1,6 +1,8 @@
 # src/projectlibre_mcp/io.py
 """Cargar y guardar proyectos. Lee .pod/.xml; escribe MSPDI .xml."""
 import os
+import shutil
+import tempfile
 
 from .jvm import ensure_jvm, pkg
 
@@ -34,9 +36,28 @@ def save_xml(project, out_path):
         )
     if not low.endswith(".xml"):
         raise ValueError("La salida debe terminar en .xml (MSPDI).")
-    parent = os.path.dirname(os.path.abspath(out_path))
+    target = os.path.realpath(out_path)  # seguir symlinks: actualizar el archivo real
+    parent = os.path.dirname(target)
     if not os.path.isdir(parent):
         raise ValueError(f"El directorio de salida no existe: {parent}")
-    w = pkg("org.mpxj.writer")
-    w.UniversalProjectWriter(w.FileFormat.MSPDI).write(project, out_path)
+    descriptor, temp_path = tempfile.mkstemp(
+        prefix="." + os.path.basename(target) + ".", suffix=".tmp", dir=parent
+    )
+    os.close(descriptor)
+    try:
+        w = pkg("org.mpxj.writer")
+        w.UniversalProjectWriter(w.FileFormat.MSPDI).write(project, temp_path)
+        if os.path.isfile(target):
+            # mkstemp crea 0600: conservar los permisos del archivo existente.
+            shutil.copymode(target, temp_path)
+            shutil.copy2(target, target + ".bak")
+        else:
+            umask = os.umask(0)
+            os.umask(umask)
+            os.chmod(temp_path, 0o666 & ~umask)
+        os.replace(temp_path, target)
+    except BaseException:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise
     return out_path
