@@ -3,7 +3,7 @@
 import jpype
 
 from .io import load_project
-from .model import jfloat, jstr, task_to_dict
+from .model import duration_in_days, jfloat, jstr, task_to_dict
 
 
 def _named_tasks(project):
@@ -115,5 +115,7 @@ def critical_path(path):
             "is_critical": is_crit,
             "total_slack": jstr(t.getTotalSlack()),
             "free_slack": jstr(t.getFreeSlack()),
+            "total_slack_days": duration_in_days(t.getTotalSlack(), p),
+            "free_slack_days": duration_in_days(t.getFreeSlack(), p),
         })
     return {"critical_task_ids": crit_ids, "tasks": rows}

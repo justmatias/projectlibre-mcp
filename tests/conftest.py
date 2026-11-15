@@ -41,3 +41,35 @@ def sample_xml(tmp_path, _jvm):
     out = str(tmp_path / "demo.xml")
     w.UniversalProjectWriter(w.FileFormat.MSPDI).write(p, out)
     return out
+
+
+@pytest.fixture()
+def hours_xml(tmp_path, _jvm):
+    """Proyecto MSPDI con duracion y lag expresados en horas (jornada de 8h).
+
+    Tarea A (16h) -> Tarea B (8h) con lag FS de 8h; Tarea C con duracion en
+    ELAPSED_DAYS (2). A tiene holgura total de 16h y libre de 8h.
+    """
+    c = importlib.import_module("org.mpxj")
+    from java.time import LocalDateTime
+
+    p = c.ProjectFile()
+    p.getProjectProperties().setStartDate(LocalDateTime.of(2026, 6, 9, 8, 0))
+    p.addDefaultBaseCalendar()
+
+    task_a = p.addTask(); task_a.setName("A"); task_a.setDuration(c.Duration.getInstance(16, c.TimeUnit.HOURS))
+    task_b = p.addTask(); task_b.setName("B"); task_b.setDuration(c.Duration.getInstance(8, c.TimeUnit.HOURS))
+    task_c = p.addTask(); task_c.setName("C"); task_c.setDuration(c.Duration.getInstance(2, c.TimeUnit.ELAPSED_DAYS))
+    task_a.setTotalSlack(c.Duration.getInstance(16, c.TimeUnit.HOURS))
+    task_a.setFreeSlack(c.Duration.getInstance(8, c.TimeUnit.HOURS))
+    task_b.addPredecessor(
+        c.Relation.Builder()
+        .predecessorTask(task_a)
+        .type(c.RelationType.FINISH_START)
+        .lag(c.Duration.getInstance(8, c.TimeUnit.HOURS))
+    )
+
+    w = importlib.import_module("org.mpxj.writer")
+    out = str(tmp_path / "hours.xml")
+    w.UniversalProjectWriter(w.FileFormat.MSPDI).write(p, out)
+    return out

@@ -56,3 +56,12 @@ def test_summarize_includes_duration_and_percent(sample_xml):
     s = reader.summarize_project(sample_xml)
     assert "duration_days" in s
     assert "percent_complete" in s
+
+
+def test_critical_path_reports_slack_in_days(hours_xml):
+    rows = {row["name"]: row for row in reader.critical_path(hours_xml)["tasks"]}
+    assert rows["A"]["total_slack_days"] == 2.0
+    assert rows["A"]["free_slack_days"] == 1.0
+    assert rows["A"]["total_slack"] is not None
+    assert rows["A"]["free_slack"] is not None
+

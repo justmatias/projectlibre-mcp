@@ -24,3 +24,29 @@ def test_relation_dict_shape(sample_xml):
     assert set(rd) == {"predecessor_id", "type", "lag_days"}
     assert rd["type"] == "FS"
     assert rd["lag_days"] == 0.0
+
+
+def _tasks_by_name(path):
+    project = io.load_project(path)
+    return {str(t.getName()): t for t in project.getTasks() if t.getName() is not None}
+
+
+def test_duration_in_hours_is_reported_in_days(hours_xml):
+    by_name = _tasks_by_name(hours_xml)
+    assert model.task_to_dict(by_name["A"])["duration_days"] == 2.0
+    assert model.task_to_dict(by_name["B"])["duration_days"] == 1.0
+
+
+def test_lag_in_hours_is_reported_in_days(hours_xml):
+    by_name = _tasks_by_name(hours_xml)
+    predecessor = model.task_to_dict(by_name["B"])["predecessors"][0]
+    assert predecessor["lag_days"] == 1.0
+
+
+def test_elapsed_duration_is_reported_in_elapsed_days(hours_xml):
+    by_name = _tasks_by_name(hours_xml)
+    assert model.task_to_dict(by_name["C"])["duration_days"] == 2.0
+
+
+def test_duration_days_none_when_duration_missing(hours_xml):
+    assert model.duration_in_days(None, None) is None
