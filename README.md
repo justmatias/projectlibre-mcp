@@ -28,7 +28,9 @@ claude mcp add -s user projectlibre -- uv run --directory "C:\Users\osyanne\Docu
 - `list_tasks(file, only_critical=False)` — tareas con id, nombre, fechas, duración, %, predecesoras, recursos.
 - `get_task(file, task_id)` — detalle de una tarea.
 - `list_resources(file)` — recursos y sus asignaciones (tarea, unidades, trabajo).
-- `critical_path(file)` — ruta crítica y holgura por tarea.
+- `critical_path(file)` — ruta crítica y holgura por tarea (`total_slack`/`free_slack` como texto y `total_slack_days`/`free_slack_days` numéricos).
+
+> En las tareas, `duration_days` y `lag_days` se convierten a días laborables según las horas/día del archivo. Si `duration_is_elapsed`/`lag_is_elapsed` es `true`, son días corridos (24 h). Un lag porcentual se calcula sobre la duración del predecesor. `summarize_project.duration_days` son días calendario entre inicio y fin.
 
 **Creación / edición** (escriben `.xml` MSPDI para importar):
 - `create_project(name, start_date, tasks, out)` — proyecto desde cero. `tasks` = lista de `{name, duration_days, predecessors?, resource?, percent_complete?, is_milestone?}`. `predecessors` admite índices 1-based o nombres.

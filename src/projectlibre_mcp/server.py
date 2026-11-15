@@ -17,13 +17,17 @@ def summarize_project(file: str) -> dict:
 
 @mcp.tool()
 def list_tasks(file: str, only_critical: bool = False) -> list:
-    """Lista las tareas con id, nombre, fechas, duración, %, predecesoras y recursos."""
+    """Lista las tareas con id, nombre, fechas, duración, %, predecesoras y recursos.
+
+    duration_days/lag_days están en días laborables según las horas/día del archivo;
+    si duration_is_elapsed/lag_is_elapsed es true, son días corridos (24 h).
+    """
     return reader.list_tasks(file, only_critical=only_critical)
 
 
 @mcp.tool()
 def get_task(file: str, task_id: int) -> dict:
-    """Detalle de una tarea por su id (uniqueID)."""
+    """Detalle de una tarea por su id (uniqueID). Mismos campos que list_tasks."""
     return reader.get_task(file, task_id)
 
 
