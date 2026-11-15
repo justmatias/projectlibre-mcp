@@ -1,5 +1,7 @@
 # tests/test_io.py
 import os
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -66,11 +68,53 @@ def test_save_xml_failure_keeps_original_and_cleans_temp(sample_xml, tmp_path, m
     out.write_text("contenido anterior")
     before = set(os.listdir(tmp_path))
 
-    def failing_pkg(name):
+    def partial_write(project, path):
+        with open(path, "w") as handle:
+            handle.write("<Project>")
         raise RuntimeError("fallo simulado")
 
-    monkeypatch.setattr(io, "pkg", failing_pkg)
+    failing_writer = SimpleNamespace(write=partial_write)
+    fake_writer_package = SimpleNamespace(
+        FileFormat=SimpleNamespace(MSPDI=None),
+        UniversalProjectWriter=lambda file_format: failing_writer,
+    )
+    monkeypatch.setattr(io, "pkg", lambda _name: fake_writer_package)
     with pytest.raises(RuntimeError, match="fallo simulado"):
         io.save_xml(p, str(out))
     assert out.read_text() == "contenido anterior"
     assert set(os.listdir(tmp_path)) == before
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="permisos POSIX")
+def test_save_xml_overwrite_keeps_file_mode(sample_xml, tmp_path):
+    p = io.load_project(sample_xml)
+    out = tmp_path / "copia.xml"
+    out.write_text("contenido anterior")
+    os.chmod(out, 0o664)
+    io.save_xml(p, str(out))
+    assert os.stat(out).st_mode & 0o777 == 0o664
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="permisos POSIX")
+def test_save_xml_new_file_uses_umask_mode(sample_xml, tmp_path):
+    p = io.load_project(sample_xml)
+    out = tmp_path / "copia.xml"
+    previous_umask = os.umask(0o022)
+    try:
+        io.save_xml(p, str(out))
+    finally:
+        os.umask(previous_umask)
+    assert os.stat(out).st_mode & 0o777 == 0o644
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks POSIX")
+def test_save_xml_follows_symlink(sample_xml, tmp_path):
+    p = io.load_project(sample_xml)
+    real_file = tmp_path / "real.xml"
+    real_file.write_text("contenido anterior")
+    link = tmp_path / "enlace.xml"
+    link.symlink_to(real_file)
+    io.save_xml(p, str(link))
+    assert link.is_symlink()
+    assert real_file.read_text() != "contenido anterior"
+    assert (tmp_path / "real.xml.bak").read_text() == "contenido anterior"
