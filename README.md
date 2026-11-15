@@ -39,6 +39,8 @@ claude mcp add -s user projectlibre -- uv run --directory "C:\Users\osyanne\Docu
 - `assign_resource(file, task_id, resource_name, units=100, out?)`
 
 > En las herramientas de edición, `out` es opcional si la entrada ya es `.xml` (se sobrescribe); si la entrada es `.pod`, `out` (`.xml`) es obligatorio. Las fechas usan formato `YYYY-MM-DD`; las duraciones, días laborables.
+>
+> Al sobrescribir un `.xml` existente, la versión anterior se conserva como `<archivo>.xml.bak` (un único respaldo, se reemplaza en cada guardado); la escritura es atómica.
 
 ## Flujo típico
 1. Exporta tu proyecto desde ProjectLibre o crea uno con `create_project`.

@@ -6,3 +6,4 @@ __pycache__/
 # salidas de proyectos generados durante pruebas manuales
 /tmp_*.xml
 *.pod
+*.bak
