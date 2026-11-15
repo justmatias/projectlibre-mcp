@@ -136,6 +136,71 @@ def _make_task(project, name, duration_days, percent_complete=None, is_milestone
     return t
 
 
+def _task_label(task):
+    return f"{task.getName()!s} (id={int(task.getUniqueID())})"
+
+
+def _predecessor_graph(project):
+    """Grafo UID de tarea -> set de UIDs de sus predecesores."""
+    graph = {}
+    for task in project.getTasks():
+        if task.getUniqueID() is None:
+            continue
+        relations = task.getPredecessors() or []
+        graph[int(task.getUniqueID())] = {
+            int(r.getPredecessorTask().getUniqueID())
+            for r in relations
+            if r.getPredecessorTask() is not None
+            and r.getPredecessorTask().getUniqueID() is not None
+        }
+    return graph
+
+
+_CYCLE_LABEL_LIMIT = 10
+
+
+def _check_new_dependency(project, pred, succ, graph=None):
+    """Valida que añadir pred como predecesor de succ no sea auto-dependencia,
+    duplicado ni cree un ciclo. Lanza ValueError en español."""
+    pred_uid, succ_uid = int(pred.getUniqueID()), int(succ.getUniqueID())
+    if pred_uid == succ_uid:
+        raise ValueError(f"Una tarea no puede depender de sí misma: {_task_label(pred)}")
+    if graph is None:
+        graph = _predecessor_graph(project)
+    if pred_uid in graph.get(succ_uid, set()):
+        raise ValueError(
+            f"La dependencia ya existe: {_task_label(pred)} -> {_task_label(succ)} "
+            "(solo se admite un vínculo por par de tareas; no se puede cambiar su tipo ni lag)"
+        )
+    # Ciclo si pred depende (transitivamente) de succ: buscar succ hacia atrás desde pred.
+    parent = {pred_uid: None}
+    stack = [pred_uid]
+    while stack:
+        node = stack.pop()
+        if node == succ_uid:
+            path = []
+            while node is not None:
+                path.append(node)
+                node = parent[node]
+            # path: succ ... pred en orden de flujo; la nueva relación pred -> succ cierra el ciclo
+            cycle = path + [path[0]]
+            if len(cycle) > _CYCLE_LABEL_LIMIT:
+                half = _CYCLE_LABEL_LIMIT // 2
+                shown = cycle[:half] + [None] + cycle[-half:]
+            else:
+                shown = cycle
+            labels = [
+                f"… ({len(path)} tareas en total)" if uid is None
+                else _task_label(project.getTaskByUniqueID(jpype.JInt(uid)))
+                for uid in shown
+            ]
+            raise ValueError("La dependencia crearía un ciclo: " + " -> ".join(labels))
+        for before in graph.get(node, ()):
+            if before not in parent:
+                parent[before] = node
+                stack.append(before)
+
+
 def _link(project, predecessor_id, successor_id, rtype="FS", lag_days=0):
     relation_type = _reltype(rtype)
     lag_days = _number(lag_days, "lag_days")
@@ -144,6 +209,7 @@ def _link(project, predecessor_id, successor_id, rtype="FS", lag_days=0):
     succ = project.getTaskByUniqueID(jpype.JInt(int(successor_id)))
     if pred is None or succ is None:
         raise ValueError(f"Tarea no encontrada: pred={predecessor_id} succ={successor_id}")
+    _check_new_dependency(project, pred, succ)
     builder = c.Relation.Builder().predecessorTask(pred).type(relation_type)
     if lag_days:
         builder = builder.lag(c.Duration.getInstance(float(lag_days), c.TimeUnit.DAYS))
@@ -199,6 +265,7 @@ def create_project(name, start_date, tasks, out):
         ))
 
     name_to_task = {str(t.getName()): t for t in created}
+    graph = _predecessor_graph(p)  # se mantiene en Python para no recorrer el proyecto por vínculo
     for i, spec in enumerate(tasks):
         for pre in (spec.get("predecessors") or []):
             if isinstance(pre, bool):
@@ -220,8 +287,10 @@ def create_project(name, start_date, tasks, out):
                         f"{names.count(key)} tareas; usa el índice 1-based"
                     )
                 pred_task = name_to_task[key]
+            _check_new_dependency(p, pred_task, created[i], graph)
             builder = c.Relation.Builder().predecessorTask(pred_task).type(_reltype("FS"))
             created[i].addPredecessor(builder)
+            graph.setdefault(int(created[i].getUniqueID()), set()).add(int(pred_task.getUniqueID()))
         if spec.get("resource"):
             _assign(p, created[i], spec["resource"], 100)
 
