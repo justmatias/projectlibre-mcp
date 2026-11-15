@@ -131,3 +131,195 @@ def test_update_task_rejects_unknown_field(sample_xml, tmp_path):
     tid = tasks["Diseno"]["id"]
     with pytest.raises(ValueError, match="no reconocidos"):
         writer.update_task(sample_xml, tid, {"duration": 8}, out=str(tmp_path / "o.xml"))
+
+
+def _first_task_id(sample_xml):
+    from projectlibre_mcp import reader
+    return {t["name"]: t for t in reader.list_tasks(sample_xml)}["Diseno"]["id"]
+
+
+def test_set_dependency_rejects_unknown_type(sample_xml, tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="FS, SS, FF, SF"):
+        writer.set_dependency(sample_xml, 1, 3, type="XX", out=str(tmp_path / "o.xml"))
+
+
+def test_set_dependency_accepts_lowercase_type(sample_xml, tmp_path):
+    from projectlibre_mcp import reader, writer
+    out = str(tmp_path / "o.xml")
+    writer.set_dependency(sample_xml, 1, 3, type="ss", out=out)
+    assert reader.get_task(out, 3)["predecessors"]
+
+
+def test_set_dependency_rejects_non_numeric_lag(sample_xml, tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="lag_days"):
+        writer.set_dependency(sample_xml, 1, 3, lag_days="mucho", out=str(tmp_path / "o.xml"))
+
+
+def test_update_task_is_milestone_false_string_is_false(sample_xml, tmp_path):
+    from projectlibre_mcp import reader, writer
+    task_id = _first_task_id(sample_xml)
+    out = str(tmp_path / "o.xml")
+    writer.update_task(sample_xml, task_id, {"is_milestone": "false"}, out=out)
+    assert reader.get_task(out, task_id)["is_milestone"] is False
+
+
+def test_update_task_is_milestone_rejects_garbage(sample_xml, tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="is_milestone"):
+        writer.update_task(sample_xml, _first_task_id(sample_xml), {"is_milestone": "maybe"},
+                           out=str(tmp_path / "o.xml"))
+
+
+def test_create_project_is_milestone_false_string_is_false(tmp_path):
+    from projectlibre_mcp import reader, writer
+    out = str(tmp_path / "n.xml")
+    writer.create_project("X", "2026-01-01",
+                          [{"name": "a", "duration_days": 1, "is_milestone": " False "}], out=out)
+    assert reader.list_tasks(out)[0]["is_milestone"] is False
+
+
+def test_create_project_rejects_unknown_spec_key(tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="Tarea 2.*duration"):
+        writer.create_project("X", "2026-01-01",
+                              [{"name": "a"}, {"name": "b", "duration": 5}],
+                              out=str(tmp_path / "n.xml"))
+
+
+def test_create_project_rejects_non_dict_spec(tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="Tarea 1"):
+        writer.create_project("X", "2026-01-01", ["a"], out=str(tmp_path / "n.xml"))
+
+
+def test_create_project_requires_task_name(tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="name"):
+        writer.create_project("X", "2026-01-01", [{"duration_days": 2}],
+                              out=str(tmp_path / "n.xml"))
+
+
+def test_create_project_rejects_blank_task_name(tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="name"):
+        writer.create_project("X", "2026-01-01", [{"name": "  "}], out=str(tmp_path / "n.xml"))
+
+
+def test_create_project_duration_defaults_to_one_day(tmp_path):
+    from projectlibre_mcp import reader, writer
+    out = str(tmp_path / "n.xml")
+    writer.create_project("X", "2026-01-01", [{"name": "a"}], out=out)
+    assert reader.list_tasks(out)[0]["duration_days"] == 1.0
+
+
+def test_create_project_rejects_ambiguous_predecessor_name(tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="ambiguo"):
+        writer.create_project(
+            "X", "2026-01-01",
+            [{"name": "a"}, {"name": "a"}, {"name": "b", "predecessors": ["a"]}],
+            out=str(tmp_path / "n.xml"))
+
+
+def test_create_project_rejects_impossible_start_date(tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        writer.create_project("X", "2026-02-30", [{"name": "a"}], out=str(tmp_path / "n.xml"))
+
+
+def test_create_project_rejects_slash_start_date(tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        writer.create_project("X", "2026/06/01", [{"name": "a"}], out=str(tmp_path / "n.xml"))
+
+
+def test_update_task_rejects_invalid_start_date(sample_xml, tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        writer.update_task(sample_xml, _first_task_id(sample_xml), {"start": "2026-13-01"},
+                           out=str(tmp_path / "o.xml"))
+
+
+def test_update_task_valid_start_date(sample_xml, tmp_path):
+    from projectlibre_mcp import reader, writer
+    task_id = _first_task_id(sample_xml)
+    out = str(tmp_path / "o.xml")
+    writer.update_task(sample_xml, task_id, {"start": "2026-06-15"}, out=out)
+    assert str(reader.get_task(out, task_id)["start"]).startswith("2026-06-15")
+
+
+def test_create_project_rejects_negative_duration(tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="duration_days"):
+        writer.create_project("X", "2026-01-01", [{"name": "a", "duration_days": -1}],
+                              out=str(tmp_path / "n.xml"))
+
+
+def test_create_project_rejects_non_numeric_duration(tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="duration_days"):
+        writer.create_project("X", "2026-01-01", [{"name": "a", "duration_days": "abc"}],
+                              out=str(tmp_path / "n.xml"))
+
+
+def test_create_project_rejects_percent_out_of_range(tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="percent_complete"):
+        writer.create_project("X", "2026-01-01", [{"name": "a", "percent_complete": 101}],
+                              out=str(tmp_path / "n.xml"))
+
+
+def test_add_task_rejects_negative_duration(sample_xml, tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="duration_days"):
+        writer.add_task(sample_xml, "Nueva", -2, out=str(tmp_path / "o.xml"))
+
+
+def test_update_task_rejects_negative_duration(sample_xml, tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="duration_days"):
+        writer.update_task(sample_xml, _first_task_id(sample_xml), {"duration_days": -1},
+                           out=str(tmp_path / "o.xml"))
+
+
+def test_update_task_rejects_percent_out_of_range(sample_xml, tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="percent_complete"):
+        writer.update_task(sample_xml, _first_task_id(sample_xml), {"percent_complete": -5},
+                           out=str(tmp_path / "o.xml"))
+
+
+def test_update_task_rejects_empty_fields(sample_xml, tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    out = tmp_path / "o.xml"
+    with pytest.raises(ValueError, match="al menos un campo"):
+        writer.update_task(sample_xml, _first_task_id(sample_xml), {}, out=str(out))
+    assert not out.exists()
+
+
+def test_assign_resource_rejects_non_positive_units(sample_xml, tmp_path):
+    import pytest
+    from projectlibre_mcp import writer
+    with pytest.raises(ValueError, match="units"):
+        writer.assign_resource(sample_xml, _first_task_id(sample_xml), "Ana", units=0,
+                               out=str(tmp_path / "o.xml"))
