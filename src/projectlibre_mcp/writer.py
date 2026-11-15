@@ -81,6 +81,13 @@ def _parse_date(value, label):
     return parsed.year, parsed.month, parsed.day
 
 
+def _require_name(value, label):
+    """Nombre de tarea: texto no vacío."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} es obligatorio y debe ser un texto no vacío")
+    return value
+
+
 def _validate_spec(index, spec):
     """Valida la forma de una tarea de create_project (index 1-based)."""
     label = f"Tarea {index}"
@@ -92,9 +99,16 @@ def _validate_spec(index, spec):
             f"{label}: claves no reconocidas {sorted(unknown, key=str)}. "
             f"Válidas: {list(_SPEC_KEYS)}"
         )
-    name = spec.get("name")
-    if not isinstance(name, str) or not name.strip():
-        raise ValueError(f"{label}: 'name' es obligatorio y debe ser un texto no vacío")
+    _require_name(spec.get("name"), f"{label}: 'name'")
+    predecessors = spec.get("predecessors")
+    if predecessors is not None and not isinstance(predecessors, list):
+        raise ValueError(
+            f"{label}: 'predecessors' debe ser una lista de índices 1-based o nombres, "
+            f"se recibió {predecessors!r}"
+        )
+    resource = spec.get("resource")
+    if resource is not None and (not isinstance(resource, str) or not resource.strip()):
+        raise ValueError(f"{label}: 'resource' debe ser un texto no vacío, se recibió {resource!r}")
     _number(spec.get("duration_days", 1), f"{label}: duration_days", minimum=0)
     if spec.get("percent_complete") is not None:
         _number(spec["percent_complete"], f"{label}: percent_complete", minimum=0, maximum=100)
@@ -234,6 +248,7 @@ def _get_task_or_raise(project, task_id):
 
 
 def add_task(file, name, duration_days, predecessors=None, resource=None, out=None):
+    _require_name(name, "name")
     _number(duration_days, "duration_days", minimum=0)
     p = load_project(file)
     # En un proyecto cargado, MPXJ no auto-asigna UniqueID/ID; calcularlos con
@@ -275,7 +290,7 @@ def update_task(file, task_id, fields, out=None):
     p = load_project(file)
     t = _get_task_or_raise(p, task_id)
     if "name" in fields:
-        t.setName(fields["name"])
+        t.setName(_require_name(fields["name"], "name"))
     if "duration_days" in fields:
         t.setDuration(c.Duration.getInstance(duration, c.TimeUnit.DAYS))
     if "percent_complete" in fields:

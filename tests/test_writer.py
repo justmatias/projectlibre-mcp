@@ -1,4 +1,6 @@
 # tests/test_writer.py
+import pytest
+
 from projectlibre_mcp import reader, writer
 
 
@@ -147,9 +149,14 @@ def test_set_dependency_rejects_unknown_type(sample_xml, tmp_path):
 
 def test_set_dependency_accepts_lowercase_type(sample_xml, tmp_path):
     from projectlibre_mcp import reader, writer
-    out = str(tmp_path / "o.xml")
-    writer.set_dependency(sample_xml, 1, 3, type="ss", out=out)
-    assert reader.get_task(out, 3)["predecessors"]
+    task_ids = {task["name"]: task["id"] for task in reader.list_tasks(sample_xml)}
+    out = str(tmp_path / "output.xml")
+    writer.set_dependency(sample_xml, task_ids["Diseno"], task_ids["Pruebas"], type="ss", out=out)
+    predecessors = reader.get_task(out, task_ids["Pruebas"])["predecessors"]
+    assert {"predecessor_id": task_ids["Diseno"], "type": "SS"} in [
+        {"predecessor_id": relation["predecessor_id"], "type": relation["type"]}
+        for relation in predecessors
+    ]
 
 
 def test_set_dependency_rejects_non_numeric_lag(sample_xml, tmp_path):
@@ -323,3 +330,31 @@ def test_assign_resource_rejects_non_positive_units(sample_xml, tmp_path):
     with pytest.raises(ValueError, match="units"):
         writer.assign_resource(sample_xml, _first_task_id(sample_xml), "Ana", units=0,
                                out=str(tmp_path / "o.xml"))
+
+
+def test_create_project_rejects_predecessors_not_a_list(tmp_path):
+    with pytest.raises(ValueError, match="predecessors"):
+        writer.create_project("P", "2026-06-09", [
+            {"name": "A"},
+            {"name": "B", "predecessors": "A"},
+        ], str(tmp_path / "output.xml"))
+
+
+def test_create_project_rejects_non_text_resource(tmp_path):
+    with pytest.raises(ValueError, match="resource"):
+        writer.create_project("P", "2026-06-09", [{"name": "A", "resource": 5}],
+                              str(tmp_path / "output.xml"))
+
+
+def test_add_task_rejects_empty_name(sample_xml, tmp_path):
+    output = tmp_path / "output.xml"
+    with pytest.raises(ValueError, match="name"):
+        writer.add_task(sample_xml, "  ", 1, out=str(output))
+    assert not output.exists()
+
+
+def test_update_task_rejects_empty_name(sample_xml, tmp_path):
+    output = tmp_path / "output.xml"
+    with pytest.raises(ValueError, match="name"):
+        writer.update_task(sample_xml, _first_task_id(sample_xml), {"name": ""}, out=str(output))
+    assert not output.exists()
