@@ -46,6 +46,16 @@ def _lag_in_days(lag, predecessor, project):
         return None if base is None else round(float(lag.getDuration()) / 100 * base, 4)
     return duration_in_days(lag, project)
 
+def is_real_task(task):
+    """False para la tarea resumen del proyecto (UID 0, nivel de esquema 0) y las filas vacías (null)."""
+    uid = task.getUniqueID()
+    if uid is None or task.getNull():
+        return False
+    if int(uid) == 0:
+        level = task.getOutlineLevel()
+        return level is not None and int(level) > 0
+    return True
+
 
 def relation_dict(rel):
     lag = rel.getLag()
