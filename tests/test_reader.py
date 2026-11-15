@@ -65,3 +65,24 @@ def test_critical_path_reports_slack_in_days(hours_xml):
     assert rows["A"]["total_slack"] is not None
     assert rows["A"]["free_slack"] is not None
 
+
+def test_list_tasks_includes_unnamed_excludes_summary_and_null(special_rows_xml):
+    tasks = reader.list_tasks(special_rows_xml)
+    assert [t["id"] for t in tasks] == [1, 2]
+    assert tasks[1]["name"] is None
+
+
+def test_summarize_counts_unnamed_task(special_rows_xml):
+    assert reader.summarize_project(special_rows_xml)["task_count"] == 2
+
+
+def test_critical_path_includes_unnamed_task(special_rows_xml):
+    ids = [t["id"] for t in reader.critical_path(special_rows_xml)["tasks"]]
+    assert ids == [1, 2]
+
+
+def test_get_task_unnamed_and_special_rows(special_rows_xml):
+    assert reader.get_task(special_rows_xml, 2)["name"] is None
+    for task_id in (0, 3):
+        with pytest.raises(ValueError):
+            reader.get_task(special_rows_xml, task_id)

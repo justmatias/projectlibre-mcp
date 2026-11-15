@@ -1,5 +1,6 @@
 # tests/conftest.py
 import importlib
+import re
 
 import mpxj  # noqa: F401
 import jpype
@@ -82,3 +83,25 @@ def in_memory_project(_jvm):
     project = org_mpxj.ProjectFile()
     project.addDefaultBaseCalendar()
     return org_mpxj, project
+
+
+@pytest.fixture()
+def special_rows_xml(sample_xml, tmp_path):
+    """MSPDI con tarea resumen UID 0, tarea sin nombre (UID 2) y fila null (UID 3)."""
+    tasks = (
+        "<Tasks>"
+        "<Task><UID>0</UID><ID>0</ID><Name>Proyecto</Name><OutlineLevel>0</OutlineLevel>"
+        "<Summary>1</Summary><Duration>PT24H0M0S</Duration></Task>"
+        "<Task><UID>1</UID><ID>1</ID><Name>Diseno</Name><OutlineLevel>1</OutlineLevel>"
+        "<Duration>PT24H0M0S</Duration></Task>"
+        "<Task><UID>2</UID><ID>2</ID><OutlineLevel>1</OutlineLevel>"
+        "<Duration>PT32H0M0S</Duration></Task>"
+        "<Task><UID>3</UID><ID>3</ID><IsNull>1</IsNull></Task>"
+        "</Tasks>"
+    )
+    with open(sample_xml, encoding="utf-8") as handle:
+        text = handle.read()
+    out = str(tmp_path / "special.xml")
+    with open(out, "w", encoding="utf-8") as handle:
+        handle.write(re.sub(r"<Tasks>.*?</Tasks>", tasks, text, flags=re.S))
+    return out

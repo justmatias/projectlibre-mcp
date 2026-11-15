@@ -3,11 +3,11 @@
 import jpype
 
 from .io import load_project
-from .model import duration_in_days, jfloat, jstr, task_to_dict
+from .model import duration_in_days, is_real_task, jfloat, jstr, task_to_dict
 
 
-def _named_tasks(project):
-    return [t for t in project.getTasks() if t.getName() is not None]
+def _real_tasks(project):
+    return [t for t in project.getTasks() if is_real_task(t)]
 
 
 def _project_duration_days(props):
@@ -33,9 +33,9 @@ def _avg_percent_complete(tasks):
 def summarize_project(path):
     p = load_project(path)
     props = p.getProjectProperties()
-    tasks = _named_tasks(p)
+    tasks = _real_tasks(p)
     resources = [r for r in p.getResources() if r.getName() is not None]
-    milestones = [str(t.getName()) for t in tasks if t.getMilestone()]
+    milestones = [jstr(t.getName()) for t in tasks if t.getMilestone()]
     return {
         "name": jstr(props.getName()),
         "start": jstr(props.getStartDate()),
@@ -50,7 +50,7 @@ def summarize_project(path):
 
 def list_tasks(path, only_critical=False):
     p = load_project(path)
-    out = [task_to_dict(t) for t in _named_tasks(p)]
+    out = [task_to_dict(t) for t in _real_tasks(p)]
     if only_critical:
         out = [t for t in out if t["is_critical"]]
     return out
@@ -59,7 +59,7 @@ def list_tasks(path, only_critical=False):
 def get_task(path, task_id):
     p = load_project(path)
     t = p.getTaskByUniqueID(jpype.JInt(int(task_id)))
-    if t is None or t.getName() is None:
+    if t is None or not is_real_task(t):
         raise ValueError(f"Tarea no encontrada: id={task_id}")
     return task_to_dict(t)
 
@@ -101,7 +101,7 @@ def list_resources(path):
 
 def critical_path(path):
     p = load_project(path)
-    tasks = _named_tasks(p)
+    tasks = _real_tasks(p)
     rows = []
     crit_ids = []
     for t in tasks:

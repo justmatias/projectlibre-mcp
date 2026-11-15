@@ -8,6 +8,7 @@ import jpype
 
 from .io import load_project, save_xml
 from .jvm import core
+from .model import is_real_task
 
 _RELTYPE = {
     "FS": "FINISH_START",
@@ -207,7 +208,7 @@ def _link(project, predecessor_id, successor_id, rtype="FS", lag_days=0):
     c = core()
     pred = project.getTaskByUniqueID(jpype.JInt(int(predecessor_id)))
     succ = project.getTaskByUniqueID(jpype.JInt(int(successor_id)))
-    if pred is None or succ is None:
+    if pred is None or succ is None or not is_real_task(pred) or not is_real_task(succ):
         raise ValueError(f"Tarea no encontrada: pred={predecessor_id} succ={successor_id}")
     _check_new_dependency(project, pred, succ)
     builder = c.Relation.Builder().predecessorTask(pred).type(relation_type)
@@ -311,7 +312,7 @@ def _resolve_out(file, out):
 
 def _get_task_or_raise(project, task_id):
     t = project.getTaskByUniqueID(jpype.JInt(int(task_id)))
-    if t is None or t.getName() is None:
+    if t is None or not is_real_task(t):
         raise ValueError(f"Tarea no encontrada: id={task_id}")
     return t
 

@@ -492,3 +492,37 @@ def test_create_project_large_chain_is_fast(tmp_path):
     started = time.perf_counter()
     writer.create_project("P", "2026-06-09", tasks, str(tmp_path / "output.xml"))
     assert time.perf_counter() - started < 10
+
+def test_update_unnamed_task(special_rows_xml, tmp_path):
+    out = str(tmp_path / "updated.xml")
+    writer.update_task(special_rows_xml, 2, {"name": "Con nombre", "duration_days": 6}, out=out)
+    task = reader.get_task(out, 2)
+    assert task["name"] == "Con nombre"
+    assert task["duration_days"] == 6.0
+
+
+def test_assign_resource_to_unnamed_task(special_rows_xml, tmp_path):
+    out = str(tmp_path / "assigned.xml")
+    writer.assign_resource(special_rows_xml, 2, "Imanol", out=out)
+    assert reader.get_task(out, 2)["resources"] == ["Imanol"]
+
+
+def test_remove_unnamed_task(special_rows_xml, tmp_path):
+    out = str(tmp_path / "removed.xml")
+    writer.remove_task(special_rows_xml, 2, out=out)
+    assert [t["id"] for t in reader.list_tasks(out)] == [1]
+
+
+def test_writer_rejects_summary_and_null_rows(special_rows_xml, tmp_path):
+    out = str(tmp_path / "never.xml")
+    for task_id in (0, 3):
+        with pytest.raises(ValueError):
+            writer.remove_task(special_rows_xml, task_id, out=out)
+
+
+def test_set_dependency_rejects_summary_and_null_rows(special_rows_xml, tmp_path):
+    output = tmp_path / "output.xml"
+    for task_id in (0, 3):
+        with pytest.raises(ValueError, match="no encontrada"):
+            writer.set_dependency(special_rows_xml, task_id, 1, out=str(output))
+    assert not output.exists()
