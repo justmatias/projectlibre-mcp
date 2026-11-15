@@ -358,3 +358,137 @@ def test_update_task_rejects_empty_name(sample_xml, tmp_path):
     with pytest.raises(ValueError, match="name"):
         writer.update_task(sample_xml, _first_task_id(sample_xml), {"name": ""}, out=str(output))
     assert not output.exists()
+def _task_ids(path):
+    return {t["name"]: t["id"] for t in reader.list_tasks(path)}
+
+
+def test_set_dependency_rejects_self_dependency(sample_xml, tmp_path):
+    import pytest
+    ids = _task_ids(sample_xml)
+    out = tmp_path / "self.xml"
+    with pytest.raises(ValueError, match="sí misma"):
+        writer.set_dependency(sample_xml, ids["Diseno"], ids["Diseno"], out=str(out))
+    assert not out.exists()
+
+
+def test_set_dependency_rejects_direct_cycle(sample_xml, tmp_path):
+    import pytest
+    ids = _task_ids(sample_xml)
+    out = tmp_path / "cycle.xml"
+    # Diseno -> Construccion ya existe; el inverso cierra un ciclo de 2.
+    with pytest.raises(ValueError, match="ciclo"):
+        writer.set_dependency(sample_xml, ids["Construccion"], ids["Diseno"], out=str(out))
+    assert not out.exists()
+
+
+def test_set_dependency_rejects_transitive_cycle(sample_xml, tmp_path):
+    import pytest
+    ids = _task_ids(sample_xml)
+    out = tmp_path / "transitive.xml"
+    # Diseno -> Construccion -> Pruebas; Pruebas -> Diseno cierra un ciclo de 3.
+    with pytest.raises(ValueError, match="ciclo") as error:
+        writer.set_dependency(sample_xml, ids["Pruebas"], ids["Diseno"], out=str(out))
+    assert "Diseno" in str(error.value) and "Construccion" in str(error.value)
+    assert not out.exists()
+
+
+def test_set_dependency_rejects_duplicate(sample_xml, tmp_path):
+    import pytest
+    ids = _task_ids(sample_xml)
+    out = tmp_path / "duplicate.xml"
+    with pytest.raises(ValueError, match="ya existe"):
+        writer.set_dependency(sample_xml, ids["Diseno"], ids["Construccion"], out=str(out))
+    assert not out.exists()
+
+
+def test_set_dependency_valid_dag_still_works(sample_xml, tmp_path):
+    ids = _task_ids(sample_xml)
+    out = str(tmp_path / "dag.xml")
+    writer.set_dependency(sample_xml, ids["Diseno"], ids["Pruebas"], out=out)
+    pruebas = reader.get_task(out, ids["Pruebas"])
+    assert ids["Diseno"] in {pr["predecessor_id"] for pr in pruebas["predecessors"]}
+
+
+def test_add_task_with_valid_predecessors(sample_xml, tmp_path):
+    ids = _task_ids(sample_xml)
+    out = str(tmp_path / "added.xml")
+    result = writer.add_task(sample_xml, "Nueva", 1, predecessors=[ids["Pruebas"]], out=out)
+    nueva = reader.get_task(out, result["task_id"])
+    assert ids["Pruebas"] in {pr["predecessor_id"] for pr in nueva["predecessors"]}
+
+
+def test_create_project_rejects_self_reference(tmp_path):
+    import pytest
+    out = tmp_path / "self.xml"
+    with pytest.raises(ValueError, match="sí misma"):
+        writer.create_project(
+            "X", "2026-01-01",
+            [{"name": "a", "duration_days": 1, "predecessors": [1]}],
+            out=str(out),
+        )
+    assert not out.exists()
+
+
+def test_create_project_rejects_cycle(tmp_path):
+    import pytest
+    out = tmp_path / "cycle.xml"
+    with pytest.raises(ValueError, match="ciclo"):
+        writer.create_project(
+            "X", "2026-01-01",
+            [{"name": "a", "duration_days": 1, "predecessors": ["c"]},
+             {"name": "b", "duration_days": 1, "predecessors": ["a"]},
+             {"name": "c", "duration_days": 1, "predecessors": [2]}],
+            out=str(out),
+        )
+    assert not out.exists()
+
+
+def test_create_project_valid_dag_with_forward_reference(tmp_path):
+    out = str(tmp_path / "dag.xml")
+    writer.create_project(
+        "X", "2026-01-01",
+        [{"name": "a", "duration_days": 1, "predecessors": [2]},
+         {"name": "b", "duration_days": 1}],
+        out=out,
+    )
+    tasks = {t["name"]: t for t in reader.list_tasks(out)}
+    assert len(tasks["a"]["predecessors"]) == 1
+
+
+def test_set_dependency_accepts_diamond(sample_xml, tmp_path):
+    task_ids = {task["name"]: task["id"] for task in reader.list_tasks(sample_xml)}
+    output = str(tmp_path / "output.xml")
+    writer.set_dependency(sample_xml, task_ids["Diseno"], task_ids["Pruebas"], out=output)
+    predecessor_ids = {
+        relation["predecessor_id"] for relation in reader.get_task(output, task_ids["Pruebas"])["predecessors"]
+    }
+    assert predecessor_ids == {task_ids["Diseno"], task_ids["Construccion"]}
+
+
+def test_set_dependency_cycle_leaves_input_unchanged(sample_xml):
+    task_ids = {task["name"]: task["id"] for task in reader.list_tasks(sample_xml)}
+    with open(sample_xml, encoding="utf-8") as handle:
+        before = handle.read()
+    with pytest.raises(ValueError, match="ciclo"):
+        writer.set_dependency(sample_xml, task_ids["Pruebas"], task_ids["Diseno"])
+    with open(sample_xml, encoding="utf-8") as handle:
+        assert handle.read() == before
+
+
+def test_create_project_long_cycle_message_is_truncated(tmp_path):
+    task_count = 50
+    tasks = [{"name": f"T{number}", "predecessors": [number - 1] if number > 1 else [task_count]}
+             for number in range(1, task_count + 1)]
+    with pytest.raises(ValueError, match="ciclo") as error:
+        writer.create_project("P", "2026-06-09", tasks, str(tmp_path / "output.xml"))
+    assert "50 tareas en total" in str(error.value)
+    assert len(str(error.value)) < 1000
+
+
+def test_create_project_large_chain_is_fast(tmp_path):
+    import time
+    tasks = [{"name": f"T{number}", "predecessors": [number - 1] if number > 1 else []}
+             for number in range(1, 1001)]
+    started = time.perf_counter()
+    writer.create_project("P", "2026-06-09", tasks, str(tmp_path / "output.xml"))
+    assert time.perf_counter() - started < 10
